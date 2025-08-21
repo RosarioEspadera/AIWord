@@ -1,11 +1,23 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import requests, os
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 app = FastAPI()
+app = FastAPI()
+
+# Allow all origins (for dev). You can restrict later to your frontend domain.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or ["https://your-frontend-domain.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 class TextRequest(BaseModel):
     text: str
