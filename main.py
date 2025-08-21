@@ -17,8 +17,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class TextRequest(BaseModel):
+class ProcessRequest(BaseModel):
     text: str
+    mode: str  # summarize | rewrite | correct | expand | paraphrase
 
 
 # --- Utility for safe HF calls ---
@@ -48,30 +49,36 @@ def hf_request(api_url: str, payload: dict, field: str):
         raise HTTPException(status_code=500, detail=f"HuggingFace request failed: {str(e)}")
 
 
-# --- Routes ---
-@app.post("/summarize")
-async def summarize(req: TextRequest):
-    API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
-    summary = hf_request(API_URL, {"inputs": req.text}, "summary_text")
-    return {"summary": summary}
+# --- Single Route ---
+@app.post("/process")
+async def process(req: ProcessRequest):
+    text = req.text
+    mode = req.mode.lower()
 
+    if mode == "summarize":
+        API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+        result = hf_request(API_URL, {"inputs": text}, "summary_text")
+        return {"mode": mode, "output": result}
 
-@app.post("/rewrite")
-async def rewrite(req: TextRequest):
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    rewritten = hf_request(API_URL, {"inputs": f"Rewrite this in clearer English:\n{req.text}"}, "generated_text")
-    return {"rewritten": rewritten}
+    elif mode == "rewrite":
+        API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+        result = hf_request(API_URL, {"inputs": f"Rewrite this in clearer English:\n{text}"}, "generated_text")
+        return {"mode": mode, "output": result}
 
+    elif mode == "correct":
+        API_URL = "https://api-inference.huggingface.co/models/prithivida/grammar_error_correcter_v1"
+        result = hf_request(API_URL, {"inputs": text}, "generated_text")
+        return {"mode": mode, "output": result}
 
-@app.post("/correct")
-async def correct(req: TextRequest):
-    API_URL = "https://api-inference.huggingface.co/models/prithivida/grammar_error_correcter_v1"
-    corrected = hf_request(API_URL, {"inputs": req.text}, "generated_text")
-    return {"corrected": corrected}
+    elif mode == "expand":
+        API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+        result = hf_request(API_URL, {"inputs": f"Expand this idea in more detail:\n{text}"}, "generated_text")
+        return {"mode": mode, "output": result}
 
+    elif mode == "paraphrase":
+        API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+        result = hf_request(API_URL, {"inputs": f"Paraphrase this while keeping the same meaning:\n{text}"}, "generated_text")
+        return {"mode": mode, "output": result}
 
-@app.post("/expand")
-async def expand(req: TextRequest):
-    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    expanded = hf_request(API_URL, {"inputs": f"Expand this idea in more detail:\n{req.text}"}, "generated_text")
-    return {"expanded": expanded}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode. Choose from: summarize, rewrite, correct, expand, paraphrase")
