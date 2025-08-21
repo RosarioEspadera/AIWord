@@ -19,9 +19,23 @@ async def summarize(req: TextRequest):
 @app.post("/rewrite")
 async def rewrite(req: TextRequest):
     API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
-    prompt = f"Rewrite this in clearer English:\n{req.text}"
-    response = requests.post(API_URL, headers=HEADERS, json={"inputs": prompt})
-    return {"rewritten": response.json()}
+    payload = {"inputs": f"Rewrite this in clearer English:\n{req.text}"}
+
+    response = requests.post(API_URL, headers=HEADERS, json=payload)
+
+    # Debug logging
+    print("HF status:", response.status_code)
+    print("HF response text:", response.text)
+
+    try:
+        data = response.json()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid response from Hugging Face")
+
+    if "error" in data:
+        raise HTTPException(status_code=500, detail=data["error"])
+
+    return {"rewritten": data[0]["generated_text"]}
 
 @app.post("/correct")
 async def correct(req: TextRequest):
