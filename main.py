@@ -1,16 +1,10 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from huggingface_hub import InferenceClient
+import requests
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Get your HF token from environment variable (Render dashboard > Environment)
 HF_TOKEN = os.getenv("HF_TOKEN")
-# You can use free models like "facebook/bart-large-cnn" (summarization)
-# or "gpt2" for text generation
-client = InferenceClient(token=HF_TOKEN)
+HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 app = FastAPI()
 
@@ -19,19 +13,13 @@ class TextRequest(BaseModel):
 
 @app.post("/summarize")
 async def summarize(req: TextRequest):
-    result = client.summarization(
-        model="facebook/bart-large-cnn",
-        inputs=req.text
-    )
-    return {"summary": result[0]["summary_text"]}
+    API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+    response = requests.post(API_URL, headers=HEADERS, json={"inputs": req.text})
+    return {"summary": response.json()}
 
 @app.post("/rewrite")
 async def rewrite(req: TextRequest):
-    # Using a text generation model
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
     prompt = f"Rewrite this in clearer English:\n{req.text}"
-    result = client.text_generation(
-        model="gpt2",
-        prompt=prompt,
-        max_new_tokens=200
-    )
-    return {"rewritten": result}
+    response = requests.post(API_URL, headers=HEADERS, json={"inputs": prompt})
+    return {"rewritten": response.json()}
