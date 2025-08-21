@@ -1,46 +1,37 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
-from openai import OpenAI
+from huggingface_hub import InferenceClient
 import os
+from dotenv import load_dotenv
 
-# Load API key from environment variable
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY is not set. Please add it in Render environment variables.")
+load_dotenv()
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Get your HF token from environment variable (Render dashboard > Environment)
+HF_TOKEN = os.getenv("HF_TOKEN")
+# You can use free models like "facebook/bart-large-cnn" (summarization)
+# or "gpt2" for text generation
+client = InferenceClient(token=HF_TOKEN)
 
-app = FastAPI(title="AI Assistant Backend")
+app = FastAPI()
 
 class TextRequest(BaseModel):
     text: str
 
 @app.post("/summarize")
 async def summarize(req: TextRequest):
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an assistant that summarizes text."},
-                {"role": "user", "content": req.text}
-            ],
-            max_tokens=150
-        )
-        return {"summary": response.choices[0].message.content.strip()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    result = client.summarization(
+        model="facebook/bart-large-cnn",
+        inputs=req.text
+    )
+    return {"summary": result[0]["summary_text"]}
 
 @app.post("/rewrite")
 async def rewrite(req: TextRequest):
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You rewrite text into clearer English."},
-                {"role": "user", "content": req.text}
-            ],
-            max_tokens=200
-        )
-        return {"rewritten": response.choices[0].message.content.strip()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Using a text generation model
+    prompt = f"Rewrite this in clearer English:\n{req.text}"
+    result = client.text_generation(
+        model="gpt2",
+        prompt=prompt,
+        max_new_tokens=200
+    )
+    return {"rewritten": result}
