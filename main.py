@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import requests, os
@@ -7,17 +7,15 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 app = FastAPI()
-app = FastAPI()
 
-# Allow all origins (for dev). You can restrict later to your frontend domain.
+# Allow all origins (for dev). Restrict later to your frontend domain.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # or ["https://your-frontend-domain.com"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class TextRequest(BaseModel):
     text: str
@@ -35,10 +33,6 @@ async def rewrite(req: TextRequest):
 
     response = requests.post(API_URL, headers=HEADERS, json=payload)
 
-    # Debug logging
-    print("HF status:", response.status_code)
-    print("HF response text:", response.text)
-
     try:
         data = response.json()
     except Exception:
@@ -54,3 +48,21 @@ async def correct(req: TextRequest):
     API_URL = "https://api-inference.huggingface.co/models/prithivida/grammar_error_correcter_v1"
     response = requests.post(API_URL, headers=HEADERS, json={"inputs": req.text})
     return {"corrected": response.json()}
+
+# ✅ New Expand Endpoint
+@app.post("/expand")
+async def expand(req: TextRequest):
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+    payload = {"inputs": f"Expand this short text into a longer, detailed version:\n{req.text}"}
+
+    response = requests.post(API_URL, headers=HEADERS, json=payload)
+
+    try:
+        data = response.json()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Invalid response from Hugging Face")
+
+    if "error" in data:
+        raise HTTPException(status_code=500, detail=data["error"])
+
+    return {"expanded": data[0]["generated_text"]}
