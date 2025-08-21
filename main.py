@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import requests
-import os
+import requests, os
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 HEADERS = {"Authorization": f"Bearer {HF_TOKEN}"}
@@ -23,3 +22,9 @@ async def rewrite(req: TextRequest):
     prompt = f"Rewrite this in clearer English:\n{req.text}"
     response = requests.post(API_URL, headers=HEADERS, json={"inputs": prompt})
     return {"rewritten": response.json()}
+
+@app.post("/correct")
+async def correct(req: TextRequest):
+    API_URL = "https://api-inference.huggingface.co/models/prithivida/grammar_error_correcter_v1"
+    response = requests.post(API_URL, headers=HEADERS, json={"inputs": req.text})
+    return {"corrected": response.json()}
