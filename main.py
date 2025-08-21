@@ -1,15 +1,15 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from groq import Groq
 import os
-from openai import OpenAI
 
-# Get OpenAI API key from environment
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
+# Load API key
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise RuntimeError("Missing GROQ_API_KEY in environment variables")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = Groq(api_key=GROQ_API_KEY)
 
 app = FastAPI()
 
@@ -26,41 +26,35 @@ class ProcessRequest(BaseModel):
     text: str
     mode: str  # summarize | rewrite | correct | expand | paraphrase
 
-
-@app.get("/")
-async def root():
-    return {"status": "AIWord backend running (OpenAI)"}
-
-
 @app.post("/process")
 async def process(req: ProcessRequest):
     text = req.text
     mode = req.mode.lower()
 
-    # Prompt templates for each mode
-    prompts = {
-        "summarize": f"Summarize this text in 2-3 sentences:\n\n{text}",
-        "rewrite": f"Rewrite this text in clearer English:\n\n{text}",
-        "correct": f"Correct the grammar and spelling in this text:\n\n{text}",
-        "expand": f"Expand this idea with more detail:\n\n{text}",
-        "paraphrase": f"Paraphrase this text while keeping the same meaning:\n\n{text}",
-    }
-
-    if mode not in prompts:
-        raise HTTPException(status_code=400, detail="Invalid mode. Choose: summarize, rewrite, correct, expand, paraphrase")
+    # Prompt template for different actions
+    if mode == "summarize":
+        prompt = f"Summarize this text in 2-3 sentences:\n\n{text}"
+    elif mode == "rewrite":
+        prompt = f"Rewrite this text in clearer English:\n\n{text}"
+    elif mode == "correct":
+        prompt = f"Correct any grammar/spelling mistakes:\n\n{text}"
+    elif mode == "expand":
+        prompt = f"Expand this idea with more detail:\n\n{text}"
+    elif mode == "paraphrase":
+        prompt = f"Paraphrase this text, keeping the same meaning:\n\n{text}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid mode")
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # or "gpt-4o-mini" for cheaper/faster
+            model="llama-3.1-8b-instant",  # fast + free
             messages=[
-                {"role": "system", "content": "You are an assistant that processes text."},
-                {"role": "user", "content": prompts[mode]}
+                {"role": "system", "content": "You are a helpful AI writing assistant."},
+                {"role": "user", "content": prompt},
             ],
-            max_tokens=300
+            max_tokens=512,
         )
-
-        output = response.choices[0].message.content.strip()
-        return {"mode": mode, "output": output}
-
+        result = response.choices[0].message["content"]
+        return {"mode": mode, "output": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OpenAI request failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Groq request failed: {str(e)}")
